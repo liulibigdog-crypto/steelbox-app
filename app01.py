@@ -1,3 +1,40 @@
+# 自定义CSS样式
+st.markdown("""
+    <style>
+    /* 页面整体居中 */
+    .block-container {
+        max-width: 850px;  /* 内容宽度 */
+        margin: auto;      /* 居中 */
+        padding-top: 2rem;
+        padding-bottom: 2rem;
+        background-color: white;
+        border-radius: 12px;
+        box-shadow: 0px 0px 15px rgba(0,0,0,0.08);
+    }
+    /* 页面背景与水印 */
+    body {
+        background: #f7f9fb;
+        background-image: url("https://via.placeholder.com/400x400.png?text=Lichen+Liu");
+        background-repeat: no-repeat;
+        background-attachment: fixed;
+        background-position: center;
+        background-size: 50%;
+        opacity: 0.98;
+    }
+    /* 让水印淡化 */
+    body::before {
+        content: "";
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(255,255,255,0.7);
+        z-index: -1;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
 import math
 import io
 import streamlit as st
@@ -144,3 +181,4 @@ with st.expander("自动推荐箱室数的规则说明（点击展开）"):
     )
 
 st.caption("© 2025 Lichen Liu | 仅用于教学与方案比选。")
+
