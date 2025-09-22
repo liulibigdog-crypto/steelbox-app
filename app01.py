@@ -1,3 +1,9 @@
+import streamlit as st   # ✅ 必须先导入
+import numpy as np
+import matplotlib.pyplot as plt
+
+st.set_page_config(page_title="Steel Box Girder Tool", layout="wide")
+
 # 自定义CSS样式
 st.markdown("""
     <style>
@@ -181,4 +187,5 @@ with st.expander("自动推荐箱室数的规则说明（点击展开）"):
     )
 
 st.caption("© 2025 Lichen Liu | 仅用于教学与方案比选。")
+
 
