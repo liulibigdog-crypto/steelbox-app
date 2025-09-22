@@ -1,84 +1,3 @@
-import streamlit as st
-
-# 论文截图模式开关（也可放到侧边栏）
-SHOWCASE = True   # True 开启美化；False 使用默认样式
-
-if SHOWCASE:
-    st.markdown("""
-    <style>
-    /* —— 让内容居中且收窄 —— */
-    .block-container{
-        max-width: 900px;          /* 中间卡片宽度 */
-        margin: 2.2rem auto 3rem;  /* 居中 + 上下留白 */
-        padding: 1.5rem 1.75rem;
-        background: #ffffff;
-        border-radius: 14px;
-        box-shadow: 0 10px 32px rgba(0,0,0,.10);
-        position: relative;
-        z-index: 2;                /* 确保在遮罩之上 */
-    }
-
-    /* —— 页面底色 —— */
-    .stApp {
-        background: #f4f6f9;       /* 四周淡灰背景 */
-        position: relative;
-    }
-
-    /* —— 四周柔和遮罩（不挡中间内容）—— */
-    .stApp::after{
-        content:"";
-        position: fixed;
-        inset: 0;
-        background: radial-gradient(ellipse at center,
-                    rgba(0,0,0,0) 0%,
-                    rgba(0,0,0,0) 55%,
-                    rgba(0,0,0,0.06) 85%,
-                    rgba(0,0,0,0.10) 100%);
-        z-index: 0;                 /* 在内容层下面 */
-        pointer-events: none;       /* 不拦截鼠标事件 */
-    }
-
-    /* —— 水印（很淡，不遮内容）—— */
-    .stApp::before{
-        content: "Lichen Liu · Steel Box Girder Tool";
-        position: fixed;
-        left: 50%;
-        top: 50%;
-        transform: translate(-50%,-50%) rotate(-12deg);
-        font-size: 56px;
-        letter-spacing: 2px;
-        color: rgba(0,0,0,0.05);
-        z-index: 1;                 /* 在遮罩上、在主卡片下 */
-        pointer-events: none;
-        white-space: nowrap;
-        user-select: none;
-    }
-
-    /* —— 侧边栏做得更简洁 —— */
-    section[data-testid="stSidebar"] {
-        background: #1f2937;        /* 深灰 */
-        color: #e5e7eb;
-        border-right: 1px solid rgba(255,255,255,0.05);
-    }
-    section[data-testid="stSidebar"] * {
-        color: #e5e7eb !important;
-    }
-
-    /* 按钮、小卡片优化（可选） */
-    .stButton>button{
-        border-radius: 10px;
-        background:#2563eb;
-        color:#fff;
-        padding: .5rem 1rem;
-        border: none;
-        box-shadow: 0 4px 14px rgba(37,99,235,.25);
-    }
-    .stDownloadButton>button{
-        border-radius:10px;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
 import math
 import io
 import streamlit as st
@@ -225,6 +144,7 @@ with st.expander("自动推荐箱室数的规则说明（点击展开）"):
     )
 
 st.caption("© 2025 Lichen Liu | 仅用于教学与方案比选。")
+
 
 
 
