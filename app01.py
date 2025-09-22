@@ -1,42 +1,80 @@
-import streamlit as st   # ✅ 必须先导入
-import numpy as np
-import matplotlib.pyplot as plt
+import streamlit as st
 
-st.set_page_config(page_title="Steel Box Girder Tool", layout="wide")
+# 论文截图模式开关（也可放到侧边栏）
+SHOWCASE = True   # True 开启美化；False 使用默认样式
 
-# 自定义CSS样式
-st.markdown("""
+if SHOWCASE:
+    st.markdown("""
     <style>
-    /* 页面整体居中 */
-    .block-container {
-        max-width: 850px;  /* 内容宽度 */
-        margin: auto;      /* 居中 */
-        padding-top: 2rem;
-        padding-bottom: 2rem;
-        background-color: white;
-        border-radius: 12px;
-        box-shadow: 0px 0px 15px rgba(0,0,0,0.08);
+    /* —— 让内容居中且收窄 —— */
+    .block-container{
+        max-width: 900px;          /* 中间卡片宽度 */
+        margin: 2.2rem auto 3rem;  /* 居中 + 上下留白 */
+        padding: 1.5rem 1.75rem;
+        background: #ffffff;
+        border-radius: 14px;
+        box-shadow: 0 10px 32px rgba(0,0,0,.10);
+        position: relative;
+        z-index: 2;                /* 确保在遮罩之上 */
     }
-    /* 页面背景与水印 */
-    body {
-        background: #f7f9fb;
-        background-image: url("https://via.placeholder.com/400x400.png?text=Lichen+Liu");
-        background-repeat: no-repeat;
-        background-attachment: fixed;
-        background-position: center;
-        background-size: 50%;
-        opacity: 0.98;
+
+    /* —— 页面底色 —— */
+    .stApp {
+        background: #f4f6f9;       /* 四周淡灰背景 */
+        position: relative;
     }
-    /* 让水印淡化 */
-    body::before {
-        content: "";
+
+    /* —— 四周柔和遮罩（不挡中间内容）—— */
+    .stApp::after{
+        content:"";
         position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(255,255,255,0.7);
-        z-index: -1;
+        inset: 0;
+        background: radial-gradient(ellipse at center,
+                    rgba(0,0,0,0) 0%,
+                    rgba(0,0,0,0) 55%,
+                    rgba(0,0,0,0.06) 85%,
+                    rgba(0,0,0,0.10) 100%);
+        z-index: 0;                 /* 在内容层下面 */
+        pointer-events: none;       /* 不拦截鼠标事件 */
+    }
+
+    /* —— 水印（很淡，不遮内容）—— */
+    .stApp::before{
+        content: "Lichen Liu · Steel Box Girder Tool";
+        position: fixed;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%,-50%) rotate(-12deg);
+        font-size: 56px;
+        letter-spacing: 2px;
+        color: rgba(0,0,0,0.05);
+        z-index: 1;                 /* 在遮罩上、在主卡片下 */
+        pointer-events: none;
+        white-space: nowrap;
+        user-select: none;
+    }
+
+    /* —— 侧边栏做得更简洁 —— */
+    section[data-testid="stSidebar"] {
+        background: #1f2937;        /* 深灰 */
+        color: #e5e7eb;
+        border-right: 1px solid rgba(255,255,255,0.05);
+    }
+    section[data-testid="stSidebar"] * {
+        color: #e5e7eb !important;
+    }
+
+    /* 按钮、小卡片优化（可选） */
+    .stButton>button{
+        border-radius: 10px;
+        background:#2563eb;
+        color:#fff;
+        padding: .5rem 1rem;
+        border: none;
+        box-shadow: 0 4px 14px rgba(37,99,235,.25);
+    }
+    .stDownloadButton>button{
+        border-radius:10px;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -187,5 +225,6 @@ with st.expander("自动推荐箱室数的规则说明（点击展开）"):
     )
 
 st.caption("© 2025 Lichen Liu | 仅用于教学与方案比选。")
+
 
 
