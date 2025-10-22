@@ -172,112 +172,134 @@ def _dim_chain_tick(ax, xs, y_dim, y_from, above=True, color=DIM_CLR, fs=9, lw=0
     for i in range(len(xs) - 1):
         _dim_tick_h(ax, xs[i], xs[i+1], y_dim, y_from, y_from,
                     text=f"{xs[i+1]-xs[i]:.0f}", above=above, color=color, fs=fs, lw=lw)
-def draw_section(B_box_mm, H_mm, t_top, t_bot, t_web, Nc,
-                 out_top_mm, out_bot_mm, B_deck_m,
-                 ohL_manual=None, ohR_manual=None):
+
+def draw_section_cad(
+    B_deck,            # m   单幅桥面宽
+    B_box_mm,          # mm  箱梁外宽
+    H_mm,              # mm  梁高
+    t_top, t_bot,      # mm  顶/底板厚度（采用值）
+    t_web,             # mm  腹板厚度（采用值）
+    Nc,                #     箱室数
+    out_top, out_bot,  # mm  顶/底板外挑翼缘长度（左右相同）
+    e_web              # mm  外侧腹板距箱边的内收量（左右相同）
+):
     """
-    清爽 CAD 风格 + 悬挑：
-    - 腹板全部竖直；
-    - 顶板外再画“桥面板/悬挑”边线，使上部总宽 = B_deck；
-    - 顶部显示两条尺寸：①链式（悬挑 + 翼缘 + 各室净宽 + 翼缘 + 悬挑），②总尺寸 B_deck；
-    - 底部总尺寸 B_box；所有标注单位统一为 mm；
-    - 箱室净宽按“整毫米”分配，保证各段相加严格等于净箱宽。
+    CAD风格截面示意：
+    - 顶部尺寸：B_deck = [ oh, cell_w × Nc, oh ]，左右对称
+    - 底部尺寸：B_box  = [ out_bot, cell_w × Nc, out_bot ]，左右对称
+    - 强制等室宽（整数mm）
+    - 左侧标注梁高 H
+    - 图下方标注 t_web
     """
-    import numpy as np
     fig, ax = plt.subplots(figsize=(10, 4.2), dpi=150)
 
-    # 统一整数化，保证几何与标注一致
-    B_box_i  = int(round(B_box_mm))
-    B_deck_i = int(round(B_deck_m * 1000))
-    y_top = H_mm - t_top
-    y_bot = t_bot
+    # ------------------ 等室宽几何 ------------------
+    # 内部可用净宽（按腹板中心线画，外侧腹板在 e_web 处）
+    clear_w = B_box_mm - 2 * e_web
+    # 单室等宽（整数mm）
+    cell_w  = int(round(clear_w / Nc))
+    # 重新计算右侧外腹板位置，保证等分且总宽匹配
+    # 内腹板（Nc-1根）位置
+    x_webs = [e_web + i * cell_w for i in range(1, Nc)]
+    # 外腹板两根
+    xL = e_web
+    xR = B_box_mm - e_web
+    # 若因取整带来 1~2mm 误差，微调 xR 以保持对称
+    xR = B_box_mm - e_web
 
-    # 1) 顶/底板
-    ax.add_patch(Rectangle((0, y_top), B_box_i, t_top, color="#1f77b4", alpha=0.20, lw=0.8))
-    ax.add_patch(Rectangle((0, 0),     B_box_i, t_bot, color="#1f77b4", alpha=0.20, lw=0.8))
+    # 桥面总宽（mm）与两侧悬空（oh，左右对称）
+    B_deck_mm = int(round(B_deck * 1000))
+    oh = max(int(round((B_deck_mm - B_box_mm) / 2)), 0)
 
-    # 2) 外侧腹板（竖直）
-    x_webL = int(round(out_top_mm))
-    x_webR = B_box_i - x_webL
-    ax.plot([x_webL, x_webL], [y_bot, y_top], color="black", lw=1.2)
-    ax.plot([x_webR, x_webR], [y_bot, y_top], color="black", lw=1.2)
+    # ------------------ 结构边界与板 ------------------
+    # 外轮廓（仅用于参考）
+    ax.add_patch(Rectangle((0, 0), B_box_mm, H_mm, fill=False, linewidth=1.2, edgecolor="#1a1a1a"))
+    # 顶/底板
+    ax.add_patch(Rectangle((0, H_mm - t_top), B_box_mm, t_top, facecolor="#c7d7ef", edgecolor="#1a1a1a", lw=1.0, alpha=0.35))
+    ax.add_patch(Rectangle((0, 0),           B_box_mm, t_bot, facecolor="#c7d7ef", edgecolor="#1a1a1a", lw=1.0, alpha=0.35))
 
-    # 3) 内腹板（按“整毫米”箱室净宽分配）
-    xs_cells = [x_webL]
-    widths = []
-    if Nc >= 1:
-        clear_i = x_webR - x_webL
-        base = clear_i // Nc
-        rem  = clear_i - base * Nc
-        widths = [base + 1] * rem + [base] * (Nc - rem)
-        x = x_webL
-        for w in widths:
-            x += w
-            xs_cells.append(x)
-        # 画内腹板
-        for xi in xs_cells[1:-1]:
-            ax.plot([xi, xi], [y_bot, y_top], color="black", lw=1.0)
+    # 腹板（外 + 内，竖直）
+    # 外腹板
+    ax.plot([xL, xL], [t_bot, H_mm - t_top], color="#1a1a1a", lw=1.4)
+    ax.plot([xR, xR], [t_bot, H_mm - t_top], color="#1a1a1a", lw=1.4)
+    # 内腹板
+    for x in x_webs:
+        ax.plot([x, x], [t_bot, H_mm - t_top], color="#1a1a1a", lw=1.4)
 
-    # 4) 高亮翼缘区
-    out_top_i = x_webL
-    out_bot_i = int(round(out_bot_mm))
-    ax.add_patch(Rectangle((0, y_top),               out_top_i, t_top, color="#1f77b4", alpha=0.35, lw=0))
-    ax.add_patch(Rectangle((x_webR, y_top), B_box_i - x_webR, t_top, color="#1f77b4", alpha=0.35, lw=0))
-    ax.add_patch(Rectangle((0, 0),                  out_bot_i, t_bot, color="#1f77b4", alpha=0.35, lw=0))
-    ax.add_patch(Rectangle((B_box_i - out_bot_i, 0), out_bot_i, t_bot, color="#1f77b4", alpha=0.35, lw=0))
+    # ------------------ 尺寸标注工具 ------------------
+    def dim_h(ax, x0, x1, y, txt, off=38, arrows=True):
+        """水平尺寸标注（CAD风格小箭头）"""
+        ax.plot([x0, x1], [y, y], color="#1a1a1a", lw=1.0)
+        ax.text((x0 + x1) / 2, y + off, txt, ha="center", va="bottom", fontsize=9)
+        if arrows:
+            s = 22
+            ax.plot([x0, x0 + s], [y, y + s * 0.5], color="#1a1a1a", lw=1.0)
+            ax.plot([x0, x0 + s], [y, y - s * 0.5], color="#1a1a1a", lw=1.0)
+            ax.plot([x1, x1 - s], [y, y + s * 0.5], color="#1a1a1a", lw=1.0)
+            ax.plot([x1, x1 - s], [y, y - s * 0.5], color="#1a1a1a", lw=1.0)
 
-    # 5) —— 计算“顶板悬挑” —— #
-    if ohL_manual is None or ohR_manual is None:
-        extra = max(B_deck_i - B_box_i, 0)
-        ohL = extra // 2
-        ohR = extra - ohL
-    else:
-        ohL = int(ohL_manual)
-        ohR = int(ohR_manual)
+    def dim_v(ax, x, y0, y1, txt, off=42, arrows=True):
+        """竖向尺寸标注（CAD风格小箭头）"""
+        ax.plot([x, x], [y0, y1], color="#1a1a1a", lw=1.0)
+        ax.text(x - off, (y0 + y1) / 2, txt, ha="center", va="center", rotation=90, fontsize=9)
+        if arrows:
+            s = 22
+            ax.plot([x, x - s * 0.5], [y0, y0 + s], color="#1a1a1a", lw=1.0)
+            ax.plot([x, x + s * 0.5], [y0, y0 + s], color="#1a1a1a", lw=1.0)
+            ax.plot([x, x - s * 0.5], [y1, y1 - s], color="#1a1a1a", lw=1.0)
+            ax.plot([x, x + s * 0.5], [y1, y1 - s], color="#1a1a1a", lw=1.0)
 
-    deck_left  = -ohL
-    deck_right = B_box_i + ohR
+    # ------------------ 顶部：B_deck 尺寸链（对称） ------------------
+    y_top = H_mm + 70
+    ax.text(B_box_mm/2, y_top + 45, f"B_deck = {B_deck_mm} mm", ha="center", va="bottom", fontsize=10)
 
-    # 桥面板（示意线，放在顶板之上少许）
-    y_deck = y_top + 0.02 * H_mm
-    ax.plot([deck_left, deck_right], [y_deck, y_deck], color="#6c757d", lw=1.2)
+    # 先画总尺寸
+    dim_h(ax, 0 - oh, B_box_mm + oh, y_top, "", off=0, arrows=False)
+    # 左 oh
+    dim_h(ax, 0 - oh, 0, y_top, f"{oh}", off=0)
+    # 中间 Nc 个 cell_w
+    x_left = 0
+    for i in range(Nc):
+        x0 = e_web + i * cell_w if i > 0 else 0
+        x1 = e_web + (i + 1) * cell_w if i < Nc - 1 else B_box_mm
+        # 为了和上面等室宽一致，这里统一标注 cell_w
+        dim_h(ax, x0, x1, y_top, f"{cell_w}", off=0)
+    # 右 oh
+    dim_h(ax, B_box_mm, B_box_mm + oh, y_top, f"{oh}", off=0)
 
-    # 6) —— 尺寸（刻度式） —— #
-    # 顶部：链式尺寸（悬挑 + 顶翼缘 + 各室净宽 + 顶翼缘 + 悬挑）
-    top_dim2_y = y_top + 0.22 * H_mm
-    xs_top_chain = [deck_left, 0, out_top_i] + xs_cells[1:] + [B_box_i, deck_right]
-    _dim_chain_tick(ax, xs_top_chain, top_dim2_y, y_top, above=True)
+    # ------------------ 底部：B_box 尺寸链（对称） ------------------
+    y_bot = -60
+    ax.text(B_box_mm/2, y_bot - 45, f"B_box  = {B_box_mm:.0f} mm", ha="center", va="top", fontsize=10)
 
-    # 顶部：总尺寸（B_deck）
-    top_total_y = y_top + 0.31 * H_mm
-    _dim_tick_h(ax, deck_left, deck_right, top_total_y, y_top,
-                text=f"B_deck = {B_deck_i} mm", above=True, fs=10)
+    # 总尺寸
+    dim_h(ax, 0, B_box_mm, y_bot, "", off=0, arrows=False)
+    # 左翼缘 out_bot
+    dim_h(ax, 0, out_bot, y_bot, f"{int(out_bot)}", off=0)
+    # 中间 Nc 个 cell_w（等宽）
+    x0 = out_bot
+    for i in range(Nc):
+        x1 = x0 + cell_w
+        dim_h(ax, x0, x1, y_bot, f"{cell_w}", off=0)
+        x0 = x1
+    # 右翼缘 out_bot（对称）
+    dim_h(ax, B_box_mm - out_bot, B_box_mm, y_bot, f"{int(out_bot)}", off=0)
 
-    # 底部：链式尺寸（只标箱内：顶翼缘长度与各室净宽；若希望底也含悬挑，可同法加一条）
-    bot_dim_y = 0 - 0.18 * H_mm
-    _dim_tick_h(ax, 0, out_bot_i, bot_dim_y, 0,
-                text=f"{out_bot_i}", above=False)
-    _dim_chain_tick(ax, xs_cells, bot_dim_y, 0, above=False)
-    _dim_tick_h(ax, x_webR, B_box_i, bot_dim_y, 0,
-                text=f"{B_box_i - x_webR}", above=False)
+    # ------------------ 梁高 H 与板厚文字 ------------------
+    # 梁高（左侧）
+    dim_v(ax, -80, 0, H_mm, f"H = {int(H_mm)} mm", off=34)
 
-    # 底部：总尺寸（B_box）
-    bot_total_y = 0 - 0.28 * H_mm
-    _dim_tick_h(ax, 0, B_box_i, bot_total_y, 0,
-                text=f"B_box  = {B_box_i} mm", above=False, fs=10)
+    # 顶/底板厚度说明
+    ax.text(e_web * 0.4, H_mm - t_top / 2, f"t_top={int(t_top)} mm", va="center", fontsize=9, color="#1a1a1a")
+    ax.text(e_web * 0.4, t_bot / 2,          f"t_bot={int(t_bot)} mm", va="center", fontsize=9, color="#1a1a1a")
 
-    # 7) 板厚文字
-    ax.text(0.012 * B_box_i, y_top + 0.03 * H_mm, f"t_top≈{int(round(t_top))} mm",
-            color="#1f77b4", fontsize=9)
-    ax.text(0.012 * B_box_i, 0.03  * H_mm,       f"t_bot≈{int(round(t_bot))} mm",
-            color="#1f77b4", fontsize=9)
+    # 腹板厚度（图下方）
+    ax.text(B_box_mm / 2, y_bot + 20, f"t_web={int(t_web)} mm  (×{Nc+1} webs)", ha="center", va="bottom", fontsize=9)
 
-    # 8) 视图范围（要能看到悬挑）
-    span = deck_right - deck_left
-    ax.set_aspect('equal')
-    ax.set_xlim(deck_left - 0.12 * span, deck_right + 0.12 * span)
-    ax.set_ylim(-0.32 * H_mm, 1.34 * H_mm)
-    ax.axis('off')
+    # 细节
+    ax.set_aspect("equal")
+    ax.set_xlim(-oh - 120, B_box_mm + oh + 120)
+    ax.set_ylim(y_bot - 80, H_mm + 140)
+    ax.axis("off")
     return fig
 
 with col2:
@@ -291,6 +313,7 @@ with col2:
                        file_name="steel_box_section.png", mime="image/png")
 
 st.caption("© 2025 Lichen Liu | 仅用于教学与方案比选。")
+
 
 
 
