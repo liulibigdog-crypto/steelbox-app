@@ -173,20 +173,19 @@ def _dim_chain_tick(ax, xs, y_dim, y_from, above=True, color=DIM_CLR, fs=9, lw=0
         _dim_tick_h(ax, xs[i], xs[i+1], y_dim, y_from, y_from,
                     text=f"{xs[i+1]-xs[i]:.0f}", above=above, color=color, fs=fs, lw=lw)
 
-import matplotlib.pyplot as plt
-from matplotlib.patches import Rectangle
-import numpy as np
+fig = draw_section_cad(
+    B_deck=B_deck,         # m
+    B_box_mm=B_box_mm,     # mm
+    H_mm=H_mm,             # mm
+    t_top=t_top,
+    t_bot=t_bot,
+    t_web=t_web,
+    Nc=Nc,
+    out_top=out_top,       # mm
+    out_bot=out_bot,       # mm
+    e_web=e_web            # mm（外侧腹板内收量；若你没算，临时给个 60 也可）
+)
 
-def draw_section_cad(
-    B_deck,            # m   单幅桥面宽
-    B_box_mm,          # mm  箱梁外宽
-    H_mm,              # mm  梁高
-    t_top, t_bot,      # mm  顶/底板厚度（采用值）
-    t_web,             # mm  腹板厚度（采用值）
-    Nc,                #     箱室数
-    out_top, out_bot,  # mm  顶/底板外挑翼缘长度（左右相同）
-    e_web              # mm  外侧腹板距箱边的内收量（左右相同）
-):
     """
     CAD风格截面示意：
     - 顶部尺寸：B_deck = [ oh, cell_w × Nc, oh ]，左右对称
@@ -317,6 +316,7 @@ with col2:
                        file_name="steel_box_section.png", mime="image/png")
 
 st.caption("© 2025 Lichen Liu | 仅用于教学与方案比选。")
+
 
 
 
