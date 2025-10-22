@@ -51,45 +51,79 @@ with st.sidebar:
 
     st.caption("说明：以上为初选参数，结果用于方案阶段；定型需按规范进行强度、稳定、构造与疲劳验算。")
 
-# ====== 计算 ======
+# ====== 计算（工程可用截面） ======
 if B_box <= 0:
     st.error("❌ 箱梁外宽 B_box ≤ 0，请检查桥面与预留带/比例设置。")
     st.stop()
 
+# 设计强度与所需模量
 fd = fy / gamma0
 M_pos_Nmm = M_pos * 1e6
 M_neg_Nmm = M_neg * 1e6
-Wreq_pos  = M_pos_Nmm / fd
-Wreq_neg  = M_neg_Nmm / fd
+Wreq_pos  = M_pos_Nmm / fd   # mm^3（正弯矩控制底板）
+Wreq_neg  = M_neg_Nmm / fd   # mm^3（负弯矩控制顶板）
 
-beff      = eta_beff * (0.85 * B_box)
+# 有效宽度与几何
+beff      = eta_beff * (0.85 * B_box)   # m
 B_box_mm  = B_box * 1000
 beff_mm   = beff   * 1000
 H_mm      = H      * 1000
 
-t_bot = Wreq_pos / (H_mm * beff_mm)
-t_top = Wreq_neg / (H_mm * beff_mm)
+# 板厚“理论值”（仅用于内部计算，不展示）
+t_bot_th = Wreq_pos / (H_mm * beff_mm)   # mm
+t_top_th = Wreq_neg / (H_mm * beff_mm)   # mm
 
-tau_allow = 0.58 * fy
-t_web_min = V * 1e3 / (tau_allow * H_mm)
-t_web     = max(t_web_min, 12.0)
-
-# 推荐箱室数
+# —— 推荐箱室数（先确定  Nc ，以便腹板剪力分担）——
 target_cell_w = 3.0
 Nc_guess = max(1, min(4, int(round(B_box/target_cell_w))))
 Nc = st.sidebar.selectbox("推荐单箱箱室数（可改）", [1,2,3,4], index=Nc_guess-1)
+n_webs = Nc + 1                            # 总腹板片数（外侧两片 + 内腹板）
 
-# ====== 结果展示 ======
+# 腹板“理论值”（剪力），考虑多腹板分担
+tau_allow = 0.58 * fy
+# 取腹板计算高度；这里用 H_mm 的 0.9 做一个保守近似，也可用 H_mm - t_top_th - t_bot_th
+h_w = 0.9 * H_mm
+t_web_th = (V * 1e3) / (tau_allow * h_w * n_webs)  # mm/片
+
+# —— 工程取值策略（侧栏可调，默认更贴近工程） ——
+t_corr        = st.sidebar.number_input("腐蚀/制造裕量 t_corr (mm)", value=2.0, step=1.0, min_value=0.0)
+t_top_min     = st.sidebar.number_input("顶板构造下限 (mm)", value=16.0, step=1.0)
+t_bot_min     = st.sidebar.number_input("底板构造下限 (mm)", value=14.0, step=1.0)
+t_web_min_cons= st.sidebar.number_input("腹板构造下限 (mm)", value=12.0, step=1.0)
+round_step    = st.sidebar.selectbox("厚度取整步长", [1, 2], index=1)  # 常用 2mm 进位
+
+def round_up(x, step=2):
+    import math
+    return math.ceil(x / step) * step
+
+# —— 采用值（取大 + 裕量 + 进位） ——
+t_top = round_up(max(t_top_th, t_top_min) + t_corr, round_step)  # 顶板（负弯矩）
+t_bot = round_up(max(t_bot_th, t_bot_min) + t_corr, round_step)  # 底板（正弯矩）
+t_web = round_up(max(t_web_th, t_web_min_cons) + t_corr, round_step)  # 每片腹板
+
+# ====== 结果展示（工程可用） ======
 col1, col2 = st.columns([1.2, 1.0], gap="large")
 
 with col1:
-    st.subheader("计算结果（初选）")
-    st.write(f"- 单幅桥面宽 **B_deck** = {B_deck:.2f} m；箱梁外宽 **B_box** = {B_box:.2f} m（占比 {B_box/B_deck*100:.1f}%）")
-    st.write(f"- **Wreq+** = {Wreq_pos/1e6:.2f} ×10⁶ mm³；**Wreq-** = {Wreq_neg/1e6:.2f} ×10⁶ mm³")
-    st.write(f"- 推荐 **Nc={Nc}**（总腹板数 {Nc+1}）")
-    st.write(f"- **t_top≈{t_top:.1f} mm**, **t_bot≈{t_bot:.1f} mm**, **t_web≥{t_web:.1f} mm**")
-    st.write(f"- 外侧腹板内收 **e_web={e_web:.0f} mm**；翼缘：**out_top={out_top:.0f} mm**, **out_bot={out_bot:.0f} mm**")
-    st.info("提示：方案阶段结果；定型需进行抗弯/抗剪、屈曲、宽厚比、焊缝与横隔/加劲构造详验算。")
+    st.subheader("计算结果（工程可用截面）")
+    st.write(
+        f"- 单幅桥面宽 **B_deck** = {B_deck:.2f} m；箱梁外宽 **B_box** = {B_box:.2f} m "
+        f"（占比 {B_box/B_deck*100:.1f}%）"
+    )
+    st.write(
+        f"- 所需模量：**Wreq+** = {Wreq_pos/1e6:.2f} ×10⁶ mm³，**Wreq-** = {Wreq_neg/1e6:.2f} ×10⁶ mm³"
+    )
+    st.write(f"- 推荐箱室数 **Nc = {Nc}**（总腹板数 {n_webs}）")
+    st.write(
+        f"- 采用厚度：顶板 **t_top = {int(t_top)} mm**，底板 **t_bot = {int(t_bot)} mm**，"
+        f"腹板 **t_web = {int(t_web)} mm/片** × {n_webs} 片"
+    )
+    # 若你前面已有 e_web / out_top / out_bot 的计算，这里仍然保留展示：
+    st.write(
+        f"- 外侧腹板内收 **e_web = {e_web:.0f} mm**；翼缘：**out_top = {out_top:.0f} mm**，"
+        f"**out_bot = {out_bot:.0f} mm**"
+    )
+    st.caption("说明：已计入构造下限与腐蚀/制造裕量，并按 2 mm 进位；用于方案/初设直接采用。定型阶段仍需做局部稳定、剪切屈曲、宽厚比与疲劳等规范校核。")
 
 # ====== 画图（工程画法） ======
 import numpy as np
@@ -257,6 +291,7 @@ with col2:
                        file_name="steel_box_section.png", mime="image/png")
 
 st.caption("© 2025 Lichen Liu | 仅用于教学与方案比选。")
+
 
 
 
