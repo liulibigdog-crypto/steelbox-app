@@ -93,110 +93,130 @@ with col1:
 
 # ====== 画图（工程画法） ======
 import numpy as np
-from matplotlib.patches import Rectangle, Wedge
+from matplotlib.patches import Rectangle, Wedge, FancyArrowPatch
 
-def _dim_chain(ax, xs, y, up=True, color="k", fs=8):
-    """
-    在 y=常数 处画尺寸链：xs 为从左到右的分界 x 坐标列表
-    在每段中点标注长度（mm），并画短“刻度线”
-    """
-    sign = +1 if up else -1
-    tick = 0.012 * (xs[-1] - xs[0])          # 刻度高度相对总宽的 1.2%
-    off  = 0.02  * (xs[-1] - xs[0])          # 文字离板面的偏移
+DIM_COLOR = "#444"
 
-    # 刻度线
-    for x in xs:
-        ax.plot([x, x], [y, y + sign*tick], color=color, lw=0.7)
-
-    # 数值
-    for i in range(len(xs)-1):
-        x0, x1 = xs[i], xs[i+1]
-        c  = 0.5*(x0+x1)
-        L  = x1 - x0
-        ax.text(c, y + sign*(tick + off),
-                f"{L:.0f}", ha="center",
-                va="bottom" if up else "top",
-                fontsize=fs, color=color)
-
-def draw_section(B_box_mm, H_mm, t_top, t_bot, t_web, Nc, out_top_mm, out_bot_mm):
+def _dim_arrow_h(ax, x0, x1, y_dim, y_from0, y_from1=None,
+                 text="", above=True, color=DIM_COLOR, fs=8, ms=10):
     """
-    工程画法的单箱多室截面：
-    - 顶/底板为整幅薄板；
-    - 外侧腹板：左 (x_topL=out_top, x_botL=out_bot)，右对称；
-    - 内腹板：按 Nc 等分，连接 top/bot 的对应位置（可带斜度）；
-    - 顶/底板外伸翼缘高亮并分别做尺寸链。
+    CAD风格水平尺寸：两端引出线 + 双箭头尺寸线 + 中部文字
+    x0, x1      : 被标注的两点x坐标（mm）
+    y_dim       : 尺寸线y坐标（mm）
+    y_from0/1   : 引出线起点（构件边缘的y），到y_dim画引出线
+    above       : True文字在尺寸线上方；False在下方
     """
-    fig, ax = plt.subplots(figsize=(9.2, 3.8), dpi=150)
+    if y_from1 is None:
+        y_from1 = y_from0
+
+    # 引出线
+    ax.plot([x0, x0], [y_from0, y_dim], color=color, lw=0.8)
+    ax.plot([x1, x1], [y_from1, y_dim], color=color, lw=0.8)
+
+    # 尺寸线（双箭头）
+    arr = FancyArrowPatch((x0, y_dim), (x1, y_dim),
+                          arrowstyle="<->,head_width=4,head_length=6",
+                          mutation_scale=ms, lw=0.9, color=color)
+    ax.add_patch(arr)
+
+    # 文字
+    dy = 0.018 * (ax.get_ylim()[1] - ax.get_ylim()[0])
+    ax.text((x0 + x1) / 2, y_dim + (dy if above else -dy),
+            text, ha="center",
+            va="bottom" if above else "top",
+            fontsize=fs, color=color)
+
+
+def _dim_chain_cad(ax, xs, y_dim, y_from, above=True, color=DIM_COLOR, fs=8, ms=10):
+    """
+    CAD风格连续尺寸：xs为从左到右的分界点序列
+    每一段画引出线+双箭头+数值（mm）
+    """
+    for i in range(len(xs) - 1):
+        x0, x1 = xs[i], xs[i + 1]
+        _dim_arrow_h(ax, x0, x1, y_dim, y_from, y_from,
+                     text=f"{x1 - x0:.0f}", above=above, color=color, fs=fs, ms=ms)
+
+
+def draw_section(B_box_mm, H_mm, t_top, t_bot, t_web, Nc, out_top_mm, out_bot_mm, B_deck_m):
+    """
+    CAD风格工程画法：
+    - 顶部：B_deck 连续双箭头；底部：B_box 连续双箭头
+    - 顶/底板分别做连续链式尺寸（翼缘段 + 箱室净宽段）
+    - 所有腹板竖直
+    """
+    fig, ax = plt.subplots(figsize=(9.6, 4.2), dpi=150)
 
     y_top = H_mm - t_top
     y_bot = t_bot
 
-    # 1) 顶/底板（整幅）
+    # 1) 顶/底板整幅
     ax.add_patch(Rectangle((0, y_top), B_box_mm, t_top, color="#1f77b4", alpha=0.20, lw=0.8))
     ax.add_patch(Rectangle((0, 0),     B_box_mm, t_bot, color="#1f77b4", alpha=0.20, lw=0.8))
 
-    # 2) 外侧腹板顶/底坐标（允许 top/bot 外伸不同 => 腹板有角度）
-    x_topL = out_top_mm
-    x_topR = B_box_mm - out_top_mm
-    x_botL = out_bot_mm
-    x_botR = B_box_mm - out_bot_mm
+    # 2) 外侧腹板（竖直）
+    x_webL = out_top_mm
+    x_webR = B_box_mm - out_top_mm
+    ax.plot([x_webL, x_webL], [y_bot, y_top], color="black", lw=1.2)
+    ax.plot([x_webR, x_webR], [y_bot, y_top], color="black", lw=1.2)
 
-    # 3) 高亮翼缘（外伸区）
-    ax.add_patch(Rectangle((0, y_top),               x_topL, t_top, color="#1f77b4", alpha=0.35, lw=0))
-    ax.add_patch(Rectangle((x_topR, y_top), B_box_mm-x_topR, t_top, color="#1f77b4", alpha=0.35, lw=0))
-    ax.add_patch(Rectangle((0, 0),                  x_botL, t_bot, color="#1f77b4", alpha=0.35, lw=0))
-    ax.add_patch(Rectangle((x_botR, 0),   B_box_mm - x_botR, t_bot, color="#1f77b4", alpha=0.35, lw=0))
-
-    # 4) 外侧腹板（斜线）
-    ax.plot([x_topL, x_botL], [y_top, y_bot], color="k", lw=1.2)
-    ax.plot([x_topR, x_botR], [y_top, y_bot], color="k", lw=1.2)
-
-    # 5) 内腹板：在 top 与 bot 间做线性插值，连成斜线（总体与外侧腹板同倾向）
-    clear_top = x_topR - x_topL
-    clear_bot = x_botR - x_botL
+    # 3) 内腹板：竖直等分
     if Nc >= 2:
+        clear = x_webR - x_webL
+        cell_w = clear / Nc
         for i in range(1, Nc):
-            r = i / Nc
-            xt = x_topL + r * clear_top
-            xb = x_botL + r * clear_bot
-            ax.plot([xt, xb], [y_top, y_bot], color="k", lw=1.0)
+            xi = x_webL + i * cell_w
+            ax.plot([xi, xi], [y_bot, y_top], color="black", lw=1.0)
 
-    # 6) 顶/底与腹板交角处做小圆角（仅示意）
-    r_top = min(0.5*t_top, 40)
-    r_bot = min(0.5*t_bot, 40)
-    # 所有腹板的 top/bot 交点
-    xs_top = [x_topL] + ([x_topL + i*clear_top/Nc for i in range(1, Nc)] if Nc >= 2 else []) + [x_topR]
-    xs_bot = [x_botL] + ([x_botL + i*clear_bot/Nc for i in range(1, Nc)] if Nc >= 2 else []) + [x_botR]
-    for xt in xs_top:
-        ax.add_patch(Wedge(center=(xt, y_top), r=r_top, theta1=180, theta2=360,
-                           width=r_top*0.55, fill=False, lw=0.8))
-    for xb in xs_bot:
-        ax.add_patch(Wedge(center=(xb, y_bot), r=r_bot, theta1=0, theta2=180,
-                           width=r_bot*0.55, fill=False, lw=0.8))
+    # 4) 高亮翼缘区（顶/底）
+    ax.add_patch(Rectangle((0, y_top),               out_top_mm, t_top, color="#1f77b4", alpha=0.35, lw=0))
+    ax.add_patch(Rectangle((x_webR, y_top), B_box_mm - x_webR, t_top, color="#1f77b4", alpha=0.35, lw=0))
+    ax.add_patch(Rectangle((0, 0),                  out_bot_mm, t_bot, color="#1f77b4", alpha=0.35, lw=0))
+    ax.add_patch(Rectangle((B_box_mm - out_bot_mm, 0), out_bot_mm, t_bot, color="#1f77b4", alpha=0.35, lw=0))
 
-    # 7) 顶/底板尺寸链（mm）
-    # 顶板： [0, out_top] + Nc 个室顶板宽 + [out_top, B_box]
-    top_bounds = [0, x_topL] + [x_topL + k*clear_top/Nc for k in range(1, Nc)] + [x_topR, B_box_mm]
-    _dim_chain(ax, top_bounds, y_top + 0.10*H_mm, up=True,  color="k", fs=8)
-    # 底板： [0, out_bot] + Nc 个室底板宽 + [out_bot, B_box]
-    bot_bounds = [0, x_botL] + [x_botL + k*clear_bot/Nc for k in range(1, Nc)] + [x_botR, B_box_mm]
-    _dim_chain(ax, bot_bounds, 0        - 0.12*H_mm, up=False, color="k", fs=8)
+    # 5) 顶/底与腹板交角的小圆角（示意）
+    r_top = min(0.5 * t_top, 40)
+    r_bot = min(0.5 * t_bot, 40)
+    xs_all = [x_webL] + ([x_webL + i * (x_webR - x_webL) / Nc for i in range(1, Nc)] if Nc >= 2 else []) + [x_webR]
+    for x in xs_all:
+        ax.add_patch(Wedge(center=(x, y_top), r=r_top, theta1=180, theta2=360, width=r_top * 0.55, fill=False, lw=0.8))
+        ax.add_patch(Wedge(center=(x, y_bot), r=r_bot, theta1=0,   theta2=180, width=r_bot * 0.55, fill=False, lw=0.8))
 
-    # 8) 关键文字
-    ax.text(B_box_mm/2, H_mm + 0.08*H_mm, f"B_box = {B_box_mm/1000:.2f} m", ha="center", va="bottom", fontsize=10)
-    ax.text(-0.035*B_box_mm, H_mm/2, f"H = {H_mm/1000:.2f} m", ha="right", va="center", rotation=90, fontsize=10)
-    ax.text(0.01*B_box_mm, y_top + 0.02*H_mm, f"t_top≈{t_top:.0f} mm", color="#1f77b4", fontsize=9)
-    ax.text(0.01*B_box_mm, 0.02*H_mm,       f"t_bot≈{t_bot:.0f} mm", color="#1f77b4", fontsize=9)
+    # 6) 顶/底板连续尺寸（翼缘 + 箱室净宽）
+    # 顶：翼缘段
+    top_dim_y = y_top + 0.16 * H_mm
+    _dim_arrow_h(ax, 0, out_top_mm, top_dim_y, y_top, text=f"{out_top_mm:.0f}", above=True)
+    # 顶：箱室净宽段
+    xs_top = [x_webL] + [x_webL + k * (x_webR - x_webL) / Nc for k in range(1, Nc)] + [x_webR]
+    _dim_chain_cad(ax, xs_top, top_dim_y, y_top, above=True)
+
+    # 底：翼缘段
+    bot_dim_y = 0 - 0.18 * H_mm
+    _dim_arrow_h(ax, 0, out_bot_mm, bot_dim_y, 0, text=f"{out_bot_mm:.0f}", above=False)
+    # 底：箱室净宽段
+    _dim_chain_cad(ax, xs_top, bot_dim_y, 0, above=False)
+
+    # 7) 总宽尺寸（顶：B_deck；底：B_box）
+    # 顶部总宽（文本写 B_deck，几何跨的是箱宽 B_box）
+    top_total_y = y_top + 0.28 * H_mm
+    _dim_arrow_h(ax, 0, B_box_mm, top_total_y, y_top, text=f"B_deck = {B_deck_m:.2f} m", above=True, fs=9, ms=12)
+    # 底部总宽
+    bot_total_y = 0 - 0.30 * H_mm
+    _dim_arrow_h(ax, 0, B_box_mm, bot_total_y, 0,     text=f"B_box  = {B_box_mm/1000:.2f} m", above=False, fs=9, ms=12)
+
+    # 8) 板厚文字
+    ax.text(0.012 * B_box_mm, y_top + 0.03 * H_mm, f"t_top≈{t_top:.0f} mm", color="#1f77b4", fontsize=9)
+    ax.text(0.012 * B_box_mm, 0.03  * H_mm,       f"t_bot≈{t_bot:.0f} mm", color="#1f77b4", fontsize=9)
 
     ax.set_aspect('equal')
-    ax.set_xlim(-0.12*B_box_mm, 1.12*B_box_mm)
-    ax.set_ylim(-0.20*H_mm,     1.22*H_mm)
+    ax.set_xlim(-0.14 * B_box_mm, 1.14 * B_box_mm)
+    ax.set_ylim(-0.32 * H_mm,     1.32 * H_mm)
     ax.axis('off')
     return fig
 
 with col2:
     st.subheader("推荐截面示意（工程画法）")
-    fig = draw_section(B_box_mm, H_mm, t_top, t_bot, t_web, Nc, out_top, out_bot)
+    fig = draw_section(B_box_mm, H_mm, t_top, t_bot, t_web, Nc, out_top, out_bot, B_deck)
     st.pyplot(fig, clear_figure=True)
 
     buf = io.BytesIO()
@@ -205,4 +225,5 @@ with col2:
                        file_name="steel_box_section.png", mime="image/png")
 
 st.caption("© 2025 Lichen Liu | 仅用于教学与方案比选。")
+
 
