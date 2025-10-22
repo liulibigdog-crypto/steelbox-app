@@ -3,7 +3,7 @@ import io
 import numpy as np
 import streamlit as st
 import matplotlib.pyplot as plt
-from matplotlib.patches import Rectangle, Wedge
+from matplotlib.patches import Rectangle
 
 st.set_page_config(page_title="钢箱梁截面快速设计", page_icon="🧮", layout="wide")
 
@@ -73,7 +73,7 @@ H_mm      = H      * 1000
 t_bot_th = Wreq_pos / (H_mm * beff_mm)   # mm
 t_top_th = Wreq_neg / (H_mm * beff_mm)   # mm
 
-# —— 推荐箱室数（先确定  Nc ，以便腹板剪力分担）——
+# —— 推荐箱室数 ——（先确定 Nc，便于腹板剪力分担）
 target_cell_w = 3.0
 Nc_guess = max(1, min(4, int(round(B_box/target_cell_w))))
 Nc = st.sidebar.selectbox("推荐单箱箱室数（可改）", [1,2,3,4], index=Nc_guess-1)
@@ -81,11 +81,10 @@ n_webs = Nc + 1                            # 总腹板片数（外侧两片 + �
 
 # 腹板“理论值”（剪力），考虑多腹板分担
 tau_allow = 0.58 * fy
-# 取腹板计算高度；这里用 H_mm 的 0.9 做一个保守近似，也可用 H_mm - t_top_th - t_bot_th
-h_w = 0.9 * H_mm
+h_w = 0.9 * H_mm   # 取腹板计算高度约为 0.9H，可按 H_mm - t_top_th - t_bot_th
 t_web_th = (V * 1e3) / (tau_allow * h_w * n_webs)  # mm/片
 
-# —— 工程取值策略（侧栏可调，默认更贴近工程） ——
+# —— 工程取值策略（默认更贴近工程） ——
 t_corr        = st.sidebar.number_input("腐蚀/制造裕量 t_corr (mm)", value=2.0, step=1.0, min_value=0.0)
 t_top_min     = st.sidebar.number_input("顶板构造下限 (mm)", value=16.0, step=1.0)
 t_bot_min     = st.sidebar.number_input("底板构造下限 (mm)", value=14.0, step=1.0)
@@ -93,7 +92,6 @@ t_web_min_cons= st.sidebar.number_input("腹板构造下限 (mm)", value=12.0, s
 round_step    = st.sidebar.selectbox("厚度取整步长", [1, 2], index=1)  # 常用 2mm 进位
 
 def round_up(x, step=2):
-    import math
     return math.ceil(x / step) * step
 
 # —— 采用值（取大 + 裕量 + 进位） ——
@@ -118,63 +116,14 @@ with col1:
         f"- 采用厚度：顶板 **t_top = {int(t_top)} mm**，底板 **t_bot = {int(t_bot)} mm**，"
         f"腹板 **t_web = {int(t_web)} mm/片** × {n_webs} 片"
     )
-    # 若你前面已有 e_web / out_top / out_bot 的计算，这里仍然保留展示：
     st.write(
         f"- 外侧腹板内收 **e_web = {e_web:.0f} mm**；翼缘：**out_top = {out_top:.0f} mm**，"
         f"**out_bot = {out_bot:.0f} mm**"
     )
     st.caption("说明：已计入构造下限与腐蚀/制造裕量，并按 2 mm 进位；用于方案/初设直接采用。定型阶段仍需做局部稳定、剪切屈曲、宽厚比与疲劳等规范校核。")
 
-# ====== 画图（工程画法） ======
-import numpy as np
-from matplotlib.patches import Rectangle
-
+# ====== 画图（工程画法 / CAD风格） ======
 DIM_CLR = "#333"   # 尺寸线颜色
-
-def _dim_tick_h(ax, x0, x1, y_dim, y_from0, y_from1=None,
-                text="", above=True, color=DIM_CLR, fs=9, lw=0.9):
-    """
-    水平尺寸：两端引出线 + 尺寸线 + 45°刻度 + 中部文字（无箭头）
-    x0,x1     : 被标注两点的 x 坐标（mm）
-    y_dim     : 尺寸线的 y 坐标（mm）
-    y_from0/1 : 引出线起点（构件边缘的 y），画到 y_dim
-    above     : 文字在尺寸线的上/下
-    """
-    if y_from1 is None:
-        y_from1 = y_from0
-
-    # 引出线
-    ax.plot([x0, x0], [y_from0, y_dim], color=color, lw=lw)
-    ax.plot([x1, x1], [y_from1, y_dim], color=color, lw=lw)
-
-    # 尺寸线
-    ax.plot([x0, x1], [y_dim, y_dim], color=color, lw=lw)
-
-    # 45°刻度
-    Lx = 0.012 * (ax.get_xlim()[1] - ax.get_xlim()[0])   # 刻度长度（随宽度自适应）
-    s  = 1 if above else -1
-    ax.plot([x0 - 0.7*Lx, x0 + 0.7*Lx],
-            [y_dim + s*0.7*Lx, y_dim - s*0.7*Lx], color=color, lw=lw)
-    ax.plot([x1 - 0.7*Lx, x1 + 0.7*Lx],
-            [y_dim + s*0.7*Lx, y_dim - s*0.7*Lx], color=color, lw=lw)
-
-    # 文字
-    off = 1.6 * Lx
-    ax.text((x0 + x1) / 2, y_dim + (off if above else -off),
-            text, ha="center", va="bottom" if above else "top",
-            fontsize=fs, color=color)
-
-
-def _dim_chain_tick(ax, xs, y_dim, y_from, above=True, color=DIM_CLR, fs=9, lw=0.9):
-    """
-    连续（链式）尺寸：xs 为从左到右的分界点序列
-    """
-    for i in range(len(xs) - 1):
-        _dim_tick_h(ax, xs[i], xs[i+1], y_dim, y_from, y_from,
-                    text=f"{xs[i+1]-xs[i]:.0f}", above=above, color=color, fs=fs, lw=lw)
-
-import matplotlib.pyplot as plt
-from matplotlib.patches import Rectangle
 
 def draw_section_cad(
     B_deck,            # m   单幅桥面宽
@@ -186,23 +135,26 @@ def draw_section_cad(
     out_top, out_bot,  # mm  顶/底板外挑翼缘
     e_web              # mm  外侧腹板距箱边的内收量
 ):
-    # ===== CAD风格截面示意：对称尺寸、等室宽、显示H与t_web =====
     fig, ax = plt.subplots(figsize=(10, 4.2), dpi=150)
 
-    # 1) 等室宽几何
-    clear_w = B_box_mm - 2 * e_web              # 腹板中心间净宽
-    cell_w  = int(round(clear_w / Nc))          # 单室等宽(整数mm)
+    # ===== 1) 等室宽几何（整数 mm，最后一室吸收误差） =====
+    clear_w = B_box_mm - 2 * e_web
+    cell_w  = int(round(clear_w / Nc))
     # 内腹板位置
-    x_webs = [e_web + i * cell_w for i in range(1, Nc)]
-    # 外腹板位置
+    x_webs = []
+    x_run = e_web
+    for i in range(1, Nc):
+        x_run += cell_w
+        x_webs.append(x_run)
+    # 强制右侧外腹板位置
     xL = e_web
     xR = B_box_mm - e_web
 
-    # 2) 顶部桥面总宽(对称尺寸 oh)
+    # ===== 2) 顶部桥面总宽（对称） =====
     B_deck_mm = int(round(B_deck * 1000))
     oh = max(int(round((B_deck_mm - B_box_mm) / 2)), 0)
 
-    # 3) 结构边界与板
+    # ===== 3) 结构边界与板 =====
     ax.add_patch(Rectangle((0, 0), B_box_mm, H_mm, fill=False, linewidth=1.2, edgecolor="#1a1a1a"))
     ax.add_patch(Rectangle((0, H_mm - t_top), B_box_mm, t_top, facecolor="#c7d7ef", edgecolor="#1a1a1a", lw=1.0, alpha=0.35))
     ax.add_patch(Rectangle((0, 0),           B_box_mm, t_bot, facecolor="#c7d7ef", edgecolor="#1a1a1a", lw=1.0, alpha=0.35))
@@ -213,7 +165,7 @@ def draw_section_cad(
     for x in x_webs:
         ax.plot([x, x], [t_bot, H_mm - t_top], color="#1a1a1a", lw=1.4)
 
-    # 4) 尺寸标注小工具
+    # ===== 4) 尺寸标注工具 =====
     def dim_h(ax, x0, x1, y, txt, off=38, arrows=True):
         ax.plot([x0, x1], [y, y], color="#1a1a1a", lw=1.0)
         if txt:
@@ -236,32 +188,39 @@ def draw_section_cad(
             ax.plot([x, x - s * 0.5], [y1, y1 - s], color="#1a1a1a", lw=1.0)
             ax.plot([x, x + s * 0.5], [y1, y1 - s], color="#1a1a1a", lw=1.0)
 
-    # 5) 顶部：B_deck 尺寸链（对称）
+    # ===== 5) 顶部：B_deck 尺寸链（对称，先oh，再等室宽，再oh） =====
     y_top = H_mm + 70
     ax.text(B_box_mm/2, y_top + 45, f"B_deck = {B_deck_mm} mm", ha="center", va="bottom", fontsize=10)
-    dim_h(ax, 0 - oh, B_box_mm + oh, y_top, "", off=0, arrows=False)  # 总链
-    dim_h(ax, 0 - oh, 0, y_top, f"{oh}", off=0)
-    # 中间等室宽
-    x0 = 0
-    for i in range(Nc):
-        x1 = x0 + cell_w if i < Nc else B_box_mm
-        dim_h(ax, x0 if i else 0, x1 if i < Nc else B_box_mm, y_top, f"{cell_w}", off=0)
-        x0 = x1
+    # 总链（无箭头）
+    dim_h(ax, -oh, B_box_mm + oh, y_top, "", off=0, arrows=False)
+    # 左/右余量
+    dim_h(ax, -oh, 0, y_top, f"{oh}", off=0)
     dim_h(ax, B_box_mm, B_box_mm + oh, y_top, f"{oh}", off=0)
+    # 内部等室宽（从 e_web 开始，到 B_box_mm - e_web 结束；最后一段吸收误差）
+    x0 = e_web
+    for i in range(Nc):
+        x1 = (B_box_mm - e_web) if i == Nc - 1 else (x0 + cell_w)
+        seg = int(round(x1 - x0))
+        dim_h(ax, x0, x1, y_top, f"{seg}", off=0)
+        x0 = x1
 
-    # 6) 底部：B_box 尺寸链（对称）
+    # ===== 6) 底部：B_box 尺寸链（对称，先翼缘，再等室宽，再翼缘） =====
     y_bot = -60
     ax.text(B_box_mm/2, y_bot - 45, f"B_box  = {B_box_mm:.0f} mm", ha="center", va="top", fontsize=10)
-    dim_h(ax, 0, B_box_mm, y_bot, "", off=0, arrows=False)          # 总链
+    dim_h(ax, 0, B_box_mm, y_bot, "", off=0, arrows=False)
+    # 左翼缘
     dim_h(ax, 0, out_bot, y_bot, f"{int(out_bot)}", off=0)
+    # 中间箱室
     x0 = out_bot
-    for _ in range(Nc):
-        x1 = x0 + cell_w
-        dim_h(ax, x0, x1, y_bot, f"{cell_w}", off=0)
+    for i in range(Nc):
+        x1 = (B_box_mm - out_bot) if i == Nc - 1 else (x0 + cell_w)
+        seg = int(round(x1 - x0))
+        dim_h(ax, x0, x1, y_bot, f"{seg}", off=0)
         x0 = x1
+    # 右翼缘
     dim_h(ax, B_box_mm - out_bot, B_box_mm, y_bot, f"{int(out_bot)}", off=0)
 
-    # 7) 梁高与厚度说明
+    # ===== 7) 梁高与厚度说明 =====
     dim_v(ax, -80, 0, H_mm, f"H = {int(H_mm)} mm", off=34)
     ax.text(e_web * 0.4, H_mm - t_top / 2, f"t_top={int(t_top)} mm", va="center", fontsize=9, color="#1a1a1a")
     ax.text(e_web * 0.4, t_bot / 2,          f"t_bot={int(t_bot)} mm", va="center", fontsize=9, color="#1a1a1a")
@@ -275,7 +234,19 @@ def draw_section_cad(
 
 with col2:
     st.subheader("推荐截面示意（工程画法）")
-    fig = draw_section(B_box_mm, H_mm, t_top, t_bot, t_web, Nc, out_top, out_bot, B_deck)
+    # ✅ 调用新函数，传入 e_web
+    fig = draw_section_cad(
+        B_deck=B_deck,
+        B_box_mm=B_box_mm,
+        H_mm=H_mm,
+        t_top=t_top,
+        t_bot=t_bot,
+        t_web=t_web,
+        Nc=Nc,
+        out_top=out_top,
+        out_bot=out_bot,
+        e_web=e_web
+    )
     st.pyplot(fig, clear_figure=True)
 
     buf = io.BytesIO()
@@ -284,12 +255,3 @@ with col2:
                        file_name="steel_box_section.png", mime="image/png")
 
 st.caption("© 2025 Lichen Liu | 仅用于教学与方案比选。")
-
-
-
-
-
-
-
-
-
