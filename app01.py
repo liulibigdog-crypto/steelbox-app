@@ -173,67 +173,51 @@ def _dim_chain_tick(ax, xs, y_dim, y_from, above=True, color=DIM_CLR, fs=9, lw=0
         _dim_tick_h(ax, xs[i], xs[i+1], y_dim, y_from, y_from,
                     text=f"{xs[i+1]-xs[i]:.0f}", above=above, color=color, fs=fs, lw=lw)
 
-fig = draw_section_cad(
-    B_deck=B_deck,         # m
-    B_box_mm=B_box_mm,     # mm
-    H_mm=H_mm,             # mm
-    t_top=t_top,
-    t_bot=t_bot,
-    t_web=t_web,
-    Nc=Nc,
-    out_top=out_top,       # mm
-    out_bot=out_bot,       # mm
-    e_web=e_web            # mm（外侧腹板内收量；若你没算，临时给个 60 也可）
-)
+import matplotlib.pyplot as plt
+from matplotlib.patches import Rectangle
 
-    """
-    CAD风格截面示意：
-    - 顶部尺寸：B_deck = [ oh, cell_w × Nc, oh ]，左右对称
-    - 底部尺寸：B_box  = [ out_bot, cell_w × Nc, out_bot ]，左右对称
-    - 强制等室宽（整数mm）
-    - 左侧标注梁高 H
-    - 图下方标注 t_web
-    """
+def draw_section_cad(
+    B_deck,            # m   单幅桥面宽
+    B_box_mm,          # mm  箱梁外宽
+    H_mm,              # mm  梁高
+    t_top, t_bot,      # mm  顶/底板厚度
+    t_web,             # mm  腹板厚度
+    Nc,                #     箱室数
+    out_top, out_bot,  # mm  顶/底板外挑翼缘
+    e_web              # mm  外侧腹板距箱边的内收量
+):
+    # ===== CAD风格截面示意：对称尺寸、等室宽、显示H与t_web =====
     fig, ax = plt.subplots(figsize=(10, 4.2), dpi=150)
 
-    # ------------------ 等室宽几何 ------------------
-    # 内部可用净宽（按腹板中心线画，外侧腹板在 e_web 处）
-    clear_w = B_box_mm - 2 * e_web
-    # 单室等宽（整数mm）
-    cell_w  = int(round(clear_w / Nc))
-    # 重新计算右侧外腹板位置，保证等分且总宽匹配
-    # 内腹板（Nc-1根）位置
+    # 1) 等室宽几何
+    clear_w = B_box_mm - 2 * e_web              # 腹板中心间净宽
+    cell_w  = int(round(clear_w / Nc))          # 单室等宽(整数mm)
+    # 内腹板位置
     x_webs = [e_web + i * cell_w for i in range(1, Nc)]
-    # 外腹板两根
+    # 外腹板位置
     xL = e_web
     xR = B_box_mm - e_web
-    # 若因取整带来 1~2mm 误差，微调 xR 以保持对称
-    xR = B_box_mm - e_web
 
-    # 桥面总宽（mm）与两侧悬空（oh，左右对称）
+    # 2) 顶部桥面总宽(对称尺寸 oh)
     B_deck_mm = int(round(B_deck * 1000))
     oh = max(int(round((B_deck_mm - B_box_mm) / 2)), 0)
 
-    # ------------------ 结构边界与板 ------------------
-    # 外轮廓（仅用于参考）
+    # 3) 结构边界与板
     ax.add_patch(Rectangle((0, 0), B_box_mm, H_mm, fill=False, linewidth=1.2, edgecolor="#1a1a1a"))
-    # 顶/底板
     ax.add_patch(Rectangle((0, H_mm - t_top), B_box_mm, t_top, facecolor="#c7d7ef", edgecolor="#1a1a1a", lw=1.0, alpha=0.35))
     ax.add_patch(Rectangle((0, 0),           B_box_mm, t_bot, facecolor="#c7d7ef", edgecolor="#1a1a1a", lw=1.0, alpha=0.35))
 
-    # 腹板（外 + 内，竖直）
-    # 外腹板
+    # 腹板（竖直）
     ax.plot([xL, xL], [t_bot, H_mm - t_top], color="#1a1a1a", lw=1.4)
     ax.plot([xR, xR], [t_bot, H_mm - t_top], color="#1a1a1a", lw=1.4)
-    # 内腹板
     for x in x_webs:
         ax.plot([x, x], [t_bot, H_mm - t_top], color="#1a1a1a", lw=1.4)
 
-    # ------------------ 尺寸标注工具 ------------------
+    # 4) 尺寸标注小工具
     def dim_h(ax, x0, x1, y, txt, off=38, arrows=True):
-        """水平尺寸标注（CAD风格小箭头）"""
         ax.plot([x0, x1], [y, y], color="#1a1a1a", lw=1.0)
-        ax.text((x0 + x1) / 2, y + off, txt, ha="center", va="bottom", fontsize=9)
+        if txt:
+            ax.text((x0 + x1) / 2, y + off, txt, ha="center", va="bottom", fontsize=9)
         if arrows:
             s = 22
             ax.plot([x0, x0 + s], [y, y + s * 0.5], color="#1a1a1a", lw=1.0)
@@ -242,9 +226,9 @@ fig = draw_section_cad(
             ax.plot([x1, x1 - s], [y, y - s * 0.5], color="#1a1a1a", lw=1.0)
 
     def dim_v(ax, x, y0, y1, txt, off=42, arrows=True):
-        """竖向尺寸标注（CAD风格小箭头）"""
         ax.plot([x, x], [y0, y1], color="#1a1a1a", lw=1.0)
-        ax.text(x - off, (y0 + y1) / 2, txt, ha="center", va="center", rotation=90, fontsize=9)
+        if txt:
+            ax.text(x - off, (y0 + y1) / 2, txt, ha="center", va="center", rotation=90, fontsize=9)
         if arrows:
             s = 22
             ax.plot([x, x - s * 0.5], [y0, y0 + s], color="#1a1a1a", lw=1.0)
@@ -252,53 +236,37 @@ fig = draw_section_cad(
             ax.plot([x, x - s * 0.5], [y1, y1 - s], color="#1a1a1a", lw=1.0)
             ax.plot([x, x + s * 0.5], [y1, y1 - s], color="#1a1a1a", lw=1.0)
 
-    # ------------------ 顶部：B_deck 尺寸链（对称） ------------------
+    # 5) 顶部：B_deck 尺寸链（对称）
     y_top = H_mm + 70
     ax.text(B_box_mm/2, y_top + 45, f"B_deck = {B_deck_mm} mm", ha="center", va="bottom", fontsize=10)
-
-    # 先画总尺寸
-    dim_h(ax, 0 - oh, B_box_mm + oh, y_top, "", off=0, arrows=False)
-    # 左 oh
+    dim_h(ax, 0 - oh, B_box_mm + oh, y_top, "", off=0, arrows=False)  # 总链
     dim_h(ax, 0 - oh, 0, y_top, f"{oh}", off=0)
-    # 中间 Nc 个 cell_w
-    x_left = 0
+    # 中间等室宽
+    x0 = 0
     for i in range(Nc):
-        x0 = e_web + i * cell_w if i > 0 else 0
-        x1 = e_web + (i + 1) * cell_w if i < Nc - 1 else B_box_mm
-        # 为了和上面等室宽一致，这里统一标注 cell_w
-        dim_h(ax, x0, x1, y_top, f"{cell_w}", off=0)
-    # 右 oh
+        x1 = x0 + cell_w if i < Nc else B_box_mm
+        dim_h(ax, x0 if i else 0, x1 if i < Nc else B_box_mm, y_top, f"{cell_w}", off=0)
+        x0 = x1
     dim_h(ax, B_box_mm, B_box_mm + oh, y_top, f"{oh}", off=0)
 
-    # ------------------ 底部：B_box 尺寸链（对称） ------------------
+    # 6) 底部：B_box 尺寸链（对称）
     y_bot = -60
     ax.text(B_box_mm/2, y_bot - 45, f"B_box  = {B_box_mm:.0f} mm", ha="center", va="top", fontsize=10)
-
-    # 总尺寸
-    dim_h(ax, 0, B_box_mm, y_bot, "", off=0, arrows=False)
-    # 左翼缘 out_bot
+    dim_h(ax, 0, B_box_mm, y_bot, "", off=0, arrows=False)          # 总链
     dim_h(ax, 0, out_bot, y_bot, f"{int(out_bot)}", off=0)
-    # 中间 Nc 个 cell_w（等宽）
     x0 = out_bot
-    for i in range(Nc):
+    for _ in range(Nc):
         x1 = x0 + cell_w
         dim_h(ax, x0, x1, y_bot, f"{cell_w}", off=0)
         x0 = x1
-    # 右翼缘 out_bot（对称）
     dim_h(ax, B_box_mm - out_bot, B_box_mm, y_bot, f"{int(out_bot)}", off=0)
 
-    # ------------------ 梁高 H 与板厚文字 ------------------
-    # 梁高（左侧）
+    # 7) 梁高与厚度说明
     dim_v(ax, -80, 0, H_mm, f"H = {int(H_mm)} mm", off=34)
-
-    # 顶/底板厚度说明
     ax.text(e_web * 0.4, H_mm - t_top / 2, f"t_top={int(t_top)} mm", va="center", fontsize=9, color="#1a1a1a")
     ax.text(e_web * 0.4, t_bot / 2,          f"t_bot={int(t_bot)} mm", va="center", fontsize=9, color="#1a1a1a")
-
-    # 腹板厚度（图下方）
     ax.text(B_box_mm / 2, y_bot + 20, f"t_web={int(t_web)} mm  (×{Nc+1} webs)", ha="center", va="bottom", fontsize=9)
 
-    # 细节
     ax.set_aspect("equal")
     ax.set_xlim(-oh - 120, B_box_mm + oh + 120)
     ax.set_ylim(y_bot - 80, H_mm + 140)
@@ -316,6 +284,7 @@ with col2:
                        file_name="steel_box_section.png", mime="image/png")
 
 st.caption("© 2025 Lichen Liu | 仅用于教学与方案比选。")
+
 
 
 
