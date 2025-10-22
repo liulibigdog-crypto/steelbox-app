@@ -173,6 +173,10 @@ def _dim_chain_tick(ax, xs, y_dim, y_from, above=True, color=DIM_CLR, fs=9, lw=0
         _dim_tick_h(ax, xs[i], xs[i+1], y_dim, y_from, y_from,
                     text=f"{xs[i+1]-xs[i]:.0f}", above=above, color=color, fs=fs, lw=lw)
 
+import matplotlib.pyplot as plt
+from matplotlib.patches import Rectangle
+import numpy as np
+
 def draw_section_cad(
     B_deck,            # m   单幅桥面宽
     B_box_mm,          # mm  箱梁外宽
@@ -313,6 +317,7 @@ with col2:
                        file_name="steel_box_section.png", mime="image/png")
 
 st.caption("© 2025 Lichen Liu | 仅用于教学与方案比选。")
+
 
 
 
