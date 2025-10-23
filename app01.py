@@ -195,6 +195,9 @@ with right:
 # ====== 画图（工程画法 / CAD风格） ======
 DIM_CLR = "#333"   # 尺寸线颜色
 
+import matplotlib.pyplot as plt
+from matplotlib.patches import Rectangle
+
 def draw_section_cad(
     B_deck,            # m   单幅桥面宽
     B_box_mm,          # mm  箱梁外宽
@@ -207,24 +210,17 @@ def draw_section_cad(
 ):
     fig, ax = plt.subplots(figsize=(10, 4.2), dpi=150)
 
-    # ===== 1) 等室宽几何（整数 mm，最后一室吸收误差） =====
+    # 等室宽几何
     clear_w = B_box_mm - 2 * e_web
     cell_w  = int(round(clear_w / Nc))
-    # 内腹板位置
-    x_webs = []
-    x_run = e_web
-    for i in range(1, Nc):
-        x_run += cell_w
-        x_webs.append(x_run)
-    # 强制右侧外腹板位置
-    xL = e_web
-    xR = B_box_mm - e_web
+    x_webs  = [e_web + i * cell_w for i in range(1, Nc)]
+    xL, xR  = e_web, B_box_mm - e_web
 
-    # ===== 2) 顶部桥面总宽（对称） =====
+    # 顶部桥面总宽（对称）
     B_deck_mm = int(round(B_deck * 1000))
     oh = max(int(round((B_deck_mm - B_box_mm) / 2)), 0)
 
-    # ===== 3) 结构边界与板 =====
+    # 外轮廓 & 顶/底板
     ax.add_patch(Rectangle((0, 0), B_box_mm, H_mm, fill=False, linewidth=1.2, edgecolor="#1a1a1a"))
     ax.add_patch(Rectangle((0, H_mm - t_top), B_box_mm, t_top, facecolor="#c7d7ef", edgecolor="#1a1a1a", lw=1.0, alpha=0.35))
     ax.add_patch(Rectangle((0, 0),           B_box_mm, t_bot, facecolor="#c7d7ef", edgecolor="#1a1a1a", lw=1.0, alpha=0.35))
@@ -235,7 +231,7 @@ def draw_section_cad(
     for x in x_webs:
         ax.plot([x, x], [t_bot, H_mm - t_top], color="#1a1a1a", lw=1.4)
 
-    # ===== 4) 尺寸标注工具 =====
+    # 尺寸辅助
     def dim_h(ax, x0, x1, y, txt, off=38, arrows=True):
         ax.plot([x0, x1], [y, y], color="#1a1a1a", lw=1.0)
         if txt:
@@ -258,39 +254,31 @@ def draw_section_cad(
             ax.plot([x, x - s * 0.5], [y1, y1 - s], color="#1a1a1a", lw=1.0)
             ax.plot([x, x + s * 0.5], [y1, y1 - s], color="#1a1a1a", lw=1.0)
 
-    # ===== 5) 顶部：B_deck 尺寸链（对称，先oh，再等室宽，再oh） =====
+    # 顶部：B_deck（对称）
     y_top = H_mm + 70
     ax.text(B_box_mm/2, y_top + 45, f"B_deck = {B_deck_mm} mm", ha="center", va="bottom", fontsize=10)
-    # 总链（无箭头）
-    dim_h(ax, -oh, B_box_mm + oh, y_top, "", off=0, arrows=False)
-    # 左/右余量
-    dim_h(ax, -oh, 0, y_top, f"{oh}", off=0)
-    dim_h(ax, B_box_mm, B_box_mm + oh, y_top, f"{oh}", off=0)
-    # 内部等室宽（从 e_web 开始，到 B_box_mm - e_web 结束；最后一段吸收误差）
-    x0 = e_web
-    for i in range(Nc):
-        x1 = (B_box_mm - e_web) if i == Nc - 1 else (x0 + cell_w)
-        seg = int(round(x1 - x0))
-        dim_h(ax, x0, x1, y_top, f"{seg}", off=0)
+    dim_h(ax, 0 - oh, B_box_mm + oh, y_top, "", off=0, arrows=False)
+    dim_h(ax, 0 - oh, 0, y_top, f"{oh}", off=0)
+    x0 = 0
+    for _ in range(Nc):
+        x1 = x0 + cell_w
+        dim_h(ax, x0, x1, y_top, f"{cell_w}", off=0)
         x0 = x1
+    dim_h(ax, B_box_mm, B_box_mm + oh, y_top, f"{oh}", off=0)
 
-    # ===== 6) 底部：B_box 尺寸链（对称，先翼缘，再等室宽，再翼缘） =====
+    # 底部：B_box（对称）
     y_bot = -60
     ax.text(B_box_mm/2, y_bot - 45, f"B_box  = {B_box_mm:.0f} mm", ha="center", va="top", fontsize=10)
     dim_h(ax, 0, B_box_mm, y_bot, "", off=0, arrows=False)
-    # 左翼缘
     dim_h(ax, 0, out_bot, y_bot, f"{int(out_bot)}", off=0)
-    # 中间箱室
     x0 = out_bot
-    for i in range(Nc):
-        x1 = (B_box_mm - out_bot) if i == Nc - 1 else (x0 + cell_w)
-        seg = int(round(x1 - x0))
-        dim_h(ax, x0, x1, y_bot, f"{seg}", off=0)
+    for _ in range(Nc):
+        x1 = x0 + cell_w
+        dim_h(ax, x0, x1, y_bot, f"{cell_w}", off=0)
         x0 = x1
-    # 右翼缘
     dim_h(ax, B_box_mm - out_bot, B_box_mm, y_bot, f"{int(out_bot)}", off=0)
 
-    # ===== 7) 梁高与厚度说明 =====
+    # 梁高与厚度文字
     dim_v(ax, -80, 0, H_mm, f"H = {int(H_mm)} mm", off=34)
     ax.text(e_web * 0.4, H_mm - t_top / 2, f"t_top={int(t_top)} mm", va="center", fontsize=9, color="#1a1a1a")
     ax.text(e_web * 0.4, t_bot / 2,          f"t_bot={int(t_bot)} mm", va="center", fontsize=9, color="#1a1a1a")
@@ -325,4 +313,5 @@ with col2:
                        file_name="steel_box_section.png", mime="image/png")
 
 st.caption("© 2025 Lichen Liu | 仅用于教学与方案比选。")
+
 
