@@ -7,6 +7,47 @@ from matplotlib.patches import Rectangle
 
 st.set_page_config(page_title="钢箱梁截面快速设计", page_icon="🧮", layout="wide")
 
+# ====== Global CSS for layout & cards ======
+st.markdown("""
+<style>
+/* 让主内容居中并加宽，减少左右空白 */
+.main .block-container{
+  max-width: 1320px;
+  padding-top: 0.8rem;
+  padding-bottom: 1.2rem;
+}
+
+/* 侧边栏宽度更精瘦（更靠左） */
+[data-testid="stSidebar"]{
+  width: 300px;
+  min-width: 300px;
+}
+
+/* 卡片风格：圆角 + 轻阴影 + 细边框（论文截图友好） */
+.card{
+  background:#fff;
+  border:1px solid #e9ecef;
+  border-radius: 12px;
+  padding: 14px 18px;
+  box-shadow: 0 4px 12px rgba(0,0,0,.04);
+  margin-bottom: 14px;
+}
+.card h4{
+  margin: 0 0 .6rem 0;
+  font-weight: 600;
+}
+
+/* 小灰字 */
+.small{ color:#6c757d; font-size:.92rem; }
+
+/* 让右侧图形区域更聚焦，周边留白更少 */
+.figure-card{ display:flex; align-items:center; justify-content:center; }
+
+/* 调整 Streamlit 默认标题与块之间的间距，减少空白 */
+h1, h2, h3 { margin-bottom: .4rem; }
+</style>
+""", unsafe_allow_html=True)
+
 # ====== 标题 ======
 st.title("钢箱梁截面快速设计小工具")
 st.caption("Made by **Lichen Liu** | 既有桥梁改造中钢箱梁截面快速初选与可视化展示（教学/方案比选）")
@@ -99,28 +140,57 @@ t_top = round_up(max(t_top_th, t_top_min) + t_corr, round_step)  # 顶板（负�
 t_bot = round_up(max(t_bot_th, t_bot_min) + t_corr, round_step)  # 底板（正弯矩）
 t_web = round_up(max(t_web_th, t_web_min_cons) + t_corr, round_step)  # 每片腹板
 
-# ====== 结果展示（工程可用） ======
-col1, col2 = st.columns([1.2, 1.0], gap="large")
+# ====== 结果展示（工程可用，优化布局） ======
+left, right = st.columns([0.60, 0.40], gap="large")
 
-with col1:
-    st.subheader("计算结果（工程可用截面）")
-    st.write(
-        f"- 单幅桥面宽 **B_deck** = {B_deck:.2f} m；箱梁外宽 **B_box** = {B_box:.2f} m "
-        f"（占比 {B_box/B_deck*100:.1f}%）"
+with left:
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.markdown("### 计算结果（工程可用截面）")
+    # 三个核心指标（上方一行展示，突显重点）
+    mcol1, mcol2, mcol3 = st.columns(3)
+    mcol1.metric("箱梁外宽 B_box", f"{B_box_mm:.0f} mm")
+    mcol2.metric("箱室数 Nc", f"{Nc} 室")
+    mcol3.metric("腹板厚 t_web", f"{int(t_web)} mm × {n_webs}")
+
+    st.markdown("""
+- 单幅桥面宽 **B_deck** = {:.2f} m；箱梁外宽 **B_box** = {:.2f} m（占比 {:.1f}%）
+- 所需模量：**Wreq+** = {:.2f} ×10⁶ mm³，**Wreq-** = {:.2f} ×10⁶ mm³
+- 采用厚度：顶板 **t_top = {} mm**，底板 **t_bot = {} mm**，腹板 **t_web = {} mm/片 × {}**  
+- 外侧腹板内收 **e_web = {} mm**；翼缘：**out_top = {} mm**，**out_bot = {} mm**
+<p class="small">说明：已计入构造下限与腐蚀/制造裕量，并按 2 mm 进位；用于方案/初设直接采用。定型阶段仍需做局部稳定、剪切屈曲、宽厚比与疲劳等规范校核。</p>
+    """.format(
+        B_deck, B_box, B_box/B_deck*100,
+        Wreq_pos/1e6, Wreq_neg/1e6,
+        int(t_top), int(t_bot), int(t_web), n_webs,
+        int(e_web), int(out_top), int(out_bot)
+    ), unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+with right:
+    st.markdown('<div class="card figure-card">', unsafe_allow_html=True)
+    st.subheader("推荐截面示意（工程画法）")
+    fig = draw_section_cad(
+        B_deck=B_deck,
+        B_box_mm=B_box_mm,
+        H_mm=H_mm,
+        t_top=t_top,
+        t_bot=t_bot,
+        t_web=t_web,
+        Nc=Nc,
+        out_top=out_top,
+        out_bot=out_bot,
+        e_web=e_web
     )
-    st.write(
-        f"- 所需模量：**Wreq+** = {Wreq_pos/1e6:.2f} ×10⁶ mm³，**Wreq-** = {Wreq_neg/1e6:.2f} ×10⁶ mm³"
-    )
-    st.write(f"- 推荐箱室数 **Nc = {Nc}**（总腹板数 {n_webs}）")
-    st.write(
-        f"- 采用厚度：顶板 **t_top = {int(t_top)} mm**，底板 **t_bot = {int(t_bot)} mm**，"
-        f"腹板 **t_web = {int(t_web)} mm/片** × {n_webs} 片"
-    )
-    st.write(
-        f"- 外侧腹板内收 **e_web = {e_web:.0f} mm**；翼缘：**out_top = {out_top:.0f} mm**，"
-        f"**out_bot = {out_bot:.0f} mm**"
-    )
-    st.caption("说明：已计入构造下限与腐蚀/制造裕量，并按 2 mm 进位；用于方案/初设直接采用。定型阶段仍需做局部稳定、剪切屈曲、宽厚比与疲劳等规范校核。")
+    st.pyplot(fig, clear_figure=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # 下载按钮单独一个小卡片，不占太多空间
+    st.markdown('<div class="card" style="text-align:center">', unsafe_allow_html=True)
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", bbox_inches="tight", dpi=200)
+    st.download_button("下载示意图 PNG", data=buf.getvalue(),
+                       file_name="steel_box_section.png", mime="image/png", use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # ====== 画图（工程画法 / CAD风格） ======
 DIM_CLR = "#333"   # 尺寸线颜色
@@ -255,3 +325,4 @@ with col2:
                        file_name="steel_box_section.png", mime="image/png")
 
 st.caption("© 2025 Lichen Liu | 仅用于教学与方案比选。")
+
